@@ -1,0 +1,257 @@
+#include "vector"
+#include<iostream>
+//Big转Little
+#define OnChangeByteOrder(x)       ((((x)&0xFF)<<24)       \
+                         |(((x)>>24)&0xFF)       \
+                         |(((x)&0x0000FF00)<<8)  \
+                         |(((x)&0x00FF0000)>>8)  )//这个将big转化为little 
+struct  Point
+{
+	double dx;
+	double dy;
+};
+vector<Point> Points;
+vector<vector<Point>> PolyLine;
+vector<vector<Point>> PolyGonS;
+double Boxs[4];
+// TODO: 在此添加控件通知处理程序代码
+
+//读取头文件
+int OnReadShp(FILE* m_ShpFile_fp) { //m_ShpFile_fp为指向shp文件的指针
+
+	// 读取坐标文件头的内容开始
+	int FileCode;
+	int Unused;
+	int FileLength;
+	int Version;
+	int ShapeType;
+	double Xmin;
+	double Ymin;
+	double Xmax;
+	double Ymax;
+	double Zmin;
+	double Zmax;
+	double Mmin;
+	double Mmax;
+	fread(&FileCode, sizeof(int), 1, m_ShpFile_fp);
+	FileCode = OnChangeByteOrder(FileCode);
+	for (int i = 0; i < 5; i++)
+		fread(&Unused, sizeof(int), 1, m_ShpFile_fp);
+	fread(&FileLength, sizeof(int), 1, m_ShpFile_fp);
+	FileLength = OnChangeByteOrder(FileLength);
+	fread(&Version, sizeof(int), 1, m_ShpFile_fp);
+	fread(&ShapeType, sizeof(int), 1, m_ShpFile_fp);
+	for (int i = 0; i <4; i++)
+	{
+		fread(Boxs+i, sizeof(double), 1, m_ShpFile_fp);
+	}
+	fread(&Zmin, sizeof(double), 1, m_ShpFile_fp);
+	fread(&Zmax, sizeof(double), 1, m_ShpFile_fp);
+	fread(&Mmin, sizeof(double), 1, m_ShpFile_fp);
+	fread(&Mmax, sizeof(double), 1, m_ShpFile_fp);
+	// 读取坐标文件头的内容结束
+	return ShapeType;		//可以返回自己需要的数据
+}
+//读取点文件
+void OnReadPointShp(FILE* ShpFile_fp) {
+	int RecordNumber;
+	int ContentLength;
+	int num = 0;
+	Points.clear();
+
+	while ((fread(&RecordNumber, sizeof(int), 1, ShpFile_fp) != 0))
+	{
+		num++;
+		fread(&ContentLength, sizeof(int), 1, ShpFile_fp);
+		RecordNumber = OnChangeByteOrder(RecordNumber);
+		ContentLength = OnChangeByteOrder(ContentLength);
+		int shapeType;
+		Point p;
+		fread(&shapeType, sizeof(int), 1, ShpFile_fp);
+		fread(&p.dx, sizeof(double), 1, ShpFile_fp);
+		fread(&p.dy, sizeof(double), 1, ShpFile_fp);
+		Points.push_back(p);
+
+	}
+	return;
+}
+//读取线文件
+void OnReadLineShp(FILE* ShpFile_fp) {
+	int RecordNumber;
+	int ContentLength;
+	int num = 0;
+
+	while ((fread(&RecordNumber, sizeof(int), 1, ShpFile_fp) != 0))
+	{
+		fread(&ContentLength, sizeof(int), 1, ShpFile_fp);
+		RecordNumber = OnChangeByteOrder(RecordNumber);
+		ContentLength = OnChangeByteOrder(ContentLength);
+		int shapeType;
+		double Box[4];
+		int NumParts;
+		int NumPoints;
+		int* Parts;
+		fread(&shapeType, sizeof(int), 1, ShpFile_fp);
+		// 读 Box
+		for (int i = 0; i < 4; i++)
+			fread(Box + i, sizeof(double), 1, ShpFile_fp);
+		// 读 NumParts 和NumPoints
+		fread(&NumParts, sizeof(int), 1, ShpFile_fp);
+		fread(&NumPoints, sizeof(int), 1, ShpFile_fp);
+		// 读 Parts 和 Points
+		Parts = new int[NumParts];
+		for (int i = 0; i < NumParts; i++)
+			fread(Parts + i, sizeof(int), 1, ShpFile_fp);
+		int pointNum;
+		vector<Point> ly;	//储存一条折线上所有的点
+		for (int i = 0; i < NumParts; i++)
+		{
+			ly.clear();
+			if (i != NumParts - 1)
+				pointNum = Parts[i + 1] - Parts[i];
+			else
+				pointNum = NumPoints - Parts[i];
+
+			Point p; //暂时存点
+
+			for (int j = 0; j < pointNum; j++)
+			{
+				fread(&p.dx, sizeof(double), 1, ShpFile_fp);
+				fread(&p.dy, sizeof(double), 1, ShpFile_fp);
+				ly.push_back(p);
+				//temp[j].dx = PointsX[j];
+				//temp[j].dy = PointsY[j];
+			}
+			PolyLine.push_back(ly);
+		}
+		delete[] Parts;
+	}
+}
+//读取面文件
+void OnReadAreaShp(FILE* m_ShpFile_fp) {
+	int RecordNumber;
+	int ContentLength;
+	while ((fread(&RecordNumber, sizeof(int), 1, m_ShpFile_fp) != 0))
+	{
+		fread(&ContentLength, sizeof(int), 1, m_ShpFile_fp);
+		RecordNumber = OnChangeByteOrder(RecordNumber);
+		ContentLength = OnChangeByteOrder(ContentLength);
+		int shapeType;
+		double Box[4];
+		int NumParts;
+		int NumPoints;
+		int* Parts;
+		fread(&shapeType, sizeof(int), 1, m_ShpFile_fp);
+		// 读 Box
+		for (int i = 0; i < 4; i++)
+		{
+			fread(Box + i, sizeof(double), 1, m_ShpFile_fp);
+		}
+		// 读 NumParts 和 NumPoints
+		fread(&NumParts, sizeof(int), 1, m_ShpFile_fp);
+		fread(&NumPoints, sizeof(int), 1, m_ShpFile_fp);
+		// 读 Parts 和 Points
+		Parts = new int[NumParts];
+		for (int i = 0; i < NumParts; i++)
+			fread(Parts + i, sizeof(int), 1, m_ShpFile_fp);
+		int pointNum;
+		vector<Point> ly; //储存一条折线上所有的点
+		for (int i = 0; i < NumParts; i++)
+		{
+			ly.clear();
+			if (i != NumParts - 1)
+				pointNum = Parts[i + 1] - Parts[i];
+			else
+				pointNum = NumPoints - Parts[i];
+
+			Point p; //暂时存点
+
+			for (int j = 0; j < pointNum; j++)
+			{
+				fread(&p.dx, sizeof(double), 1, m_ShpFile_fp);
+				fread(&p.dy, sizeof(double), 1, m_ShpFile_fp);
+				ly.push_back(p);
+			}
+			PolyGonS.push_back(ly);
+		}
+		delete[] Parts;
+	}
+}
+
+{
+
+{
+
+	const char *filename = "C:\\Users\\24932\\Desktop\\datas\\china.shp";
+	FILE* p;
+	if ((p = fopen(filename, "rb")) == NULL)
+	{
+		cout << "文件打开失败" << endl;
+	}
+	int shapetype = OnReadShp(p);// TODO: 在此添加命令处理程序代码
+	switch (shapetype) {
+	case 0: cout << "空" << endl; break;
+
+	case 1:
+		OnReadPointShp(p);
+	case 3:
+		OnReadLineShp(p);
+	case 5:
+		OnReadAreaShp(p);
+	}
+	CRect rect;
+	GetClientRect(&rect);//获取工作区长宽
+	int W = (rect.Width());	//自行更改数值
+	int H = (rect.Height());
+	double ScaleX = ((Boxs[2] - Boxs[0])/W);
+	double ScaleY =((Boxs[3] - Boxs[1])/H);
+	double Scale = max(ScaleX, ScaleY);
+	//double Scale = ScaleX > ScaleY ? ScaleX : ScaleY;
+	double _dCx = (Boxs[2] + Boxs[0]) / 2.0;//中心点
+	double _dCy = (Boxs[3] + Boxs[1]) / 2.0;
+	for (int i = 0; i < Points.size(); i++) {//画点
+		CClientDC dc(this);
+		dc.SetPixel((Points[i].dx-——dCx)/Scale+W/2, H/2-(Points[i].dy-_dCy) /ScaleY, RGB(255, 0, 0));//红色
+	}
+
+	for (int i = 0; i < PolyLine.size(); i++) {//画线
+		for (int j = 0; j < PolyLine[i].size(); j++) {
+			CClientDC dc(this);
+			CPen pen(PS_SOLID, 1, RGB(0, 255, 0));//绿色
+			dc.SelectObject(&pen);
+
+			dc.MoveTo((PolyLine[i][j].dx -_dCx)/ScaleX+W/2, Y/2-( PolyLine[i][j].dy-_dCy)/ ScaleY);
+			if (j < PolyLine[i].size() - 1)
+				dc.LineTo((PolyLine[i][j+1].dx -_dCx)/ScaleX+W/2),Y/2-( PolyLine[i][j+1].dy-_dCy)/ ScaleY);
+		}
+	}
+
+	CArray<CPoint, CPoint>* myArray;//存储坐标点
+	myArray = new CArray<CPoint, CPoint>;
+
+	for (int i = 0; i < PolyGonS.size(); i++) {
+		CPoint cp;
+		for (int j = 0; j < PolyGonS[i].size(); j++) {
+			//int out = 1;			
+			cp.x = (int((PolyGonS[i][j].dx -_dCx) / Scale)) + W / 2;
+			cp.y = H/2-(int((PolyGonS[i][j].dy-_dCy) / Scale));
+			myArray->Add(cp);
+		}
+		int nSize = myArray->GetSize();
+		CPoint* pt = new CPoint[nSize];
+		for (int i = 0; i < nSize; i++)
+		{
+			pt[i] = myArray->GetAt(i);
+		}
+		CClientDC dc(this);
+		CBrush brush(RGB(0, 0, 255)), * pOldBrush;//以lan画刷为例
+		pOldBrush = dc.SelectObject(&brush);
+		dc.Polygon(pt, nSize);
+		myArray->RemoveAll();
+		delete pt;
+	}
+	// TODO: 在此添加控件通知处理程序代码
+}
+int main()
+{
+}
